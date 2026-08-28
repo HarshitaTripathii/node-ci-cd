@@ -8,49 +8,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Get code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Setup Node
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
-      # Install dependencies
       - name: Install dependencies
         run: npm install
 
-      # Start application
       - name: Start application
         run: |
           node index.js &
           sleep 3
 
-      # Test application
       - name: Check application
         run: curl http://localhost:3000
 
-      # Login to Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Build Docker image
       - name: Build Docker image
         run: |
           docker build \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/my-node-app:latest \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/node-ci-cd:${{ github.sha }} \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/node-ci-cd:latest \
             .
 
-      # Push Docker image
       - name: Push Docker image
         run: |
           docker push \
-            ${{ secrets.DOCKERHUB_USERNAME }}/my-node-app:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/node-ci-cd:${{ github.sha }}
+
+          docker push \
+            ${{ secrets.DOCKERHUB_USERNAME }}/node-ci-cd:latest
 
   deploy:
     runs-on: ubuntu-latest
@@ -58,7 +54,6 @@ jobs:
     needs: build-and-push
 
     steps:
-      # SSH into AWS and deploy
       - name: Deploy to AWS
         uses: appleboy/ssh-action@v1.2.2
         with:
@@ -67,7 +62,7 @@ jobs:
           key: ${{ secrets.AWS_SSH_KEY }}
 
           script: |
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/node-ci-cd:latest
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/node-ci-cd:${{ github.sha }}
 
             docker stop node-ci-cd || true
             docker rm node-ci-cd || true
@@ -75,4 +70,4 @@ jobs:
             docker run -d \
               --name node-ci-cd \
               -p 3000:3000 \
-              ${{ secrets.DOCKERHUB_USERNAME }}/node-ci-cd:latest
+              ${{ secrets.DOCKERHUB_USERNAME }}/node-ci-cd:${{ github.sha }}

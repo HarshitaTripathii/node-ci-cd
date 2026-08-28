@@ -1,24 +1,28 @@
-name: Node.js CI
+name: Node.js CI/CD
 
 on:
   push:
 
 jobs:
-  test:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get project code
+      # 1. Download your GitHub repository code
+      - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2. Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
+      # 3. Install dependencies
       - name: Install dependencies
         run: npm install
 
+      # 4. Start and check the application
       - name: Start application
         run: |
           node index.js &
@@ -27,5 +31,21 @@ jobs:
       - name: Check application
         run: curl http://localhost:3000
 
+      # 5. Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 6. Build Docker image
       - name: Build Docker image
-        run: docker build -t my-node-app .
+        run: |
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/node-ci-cd:latest \
+            .
+
+      # 7. Push Docker image
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/node-ci-cd:latest

@@ -19,5 +19,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Check Node version
-        run: node --version
+      - name: Start application
+        run: |
+          node index.js &
+          sleep 3
+
+      - name: Check application
+        run: curl http://localhost:3000

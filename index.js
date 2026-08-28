@@ -2,7 +2,7 @@ import express from "express";
 
 const app = express();
 const PORT = 3000;
-app.liste(PORT, () => {
+app.listen(PORT, () => {
   console.log(`Server is running at port ${PORT}`);
 });
 

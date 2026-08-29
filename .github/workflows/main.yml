@@ -12,9 +12,11 @@ jobs:
       contents: read
 
     steps:
-      # 1. Get source code
+
+      # 1. Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
+
 
       # 2. Setup Node.js
       - name: Setup Node.js
@@ -22,9 +24,11 @@ jobs:
         with:
           node-version: 24
 
+
       # 3. Install dependencies
       - name: Install dependencies
         run: npm install
+
 
       # 4. Start application
       - name: Start application
@@ -32,23 +36,40 @@ jobs:
           node index.js &
           sleep 3
 
+
       # 5. Test application
       - name: Check application
         run: curl http://localhost:3000
 
-      # 6. Configure AWS using OIDC
+
+      # 6. Debug GitHub OIDC token
+      # TEMPORARY - we will remove this later
+      - name: Debug OIDC
+        uses: github/actions-oidc-debugger@main
+
+
+      # 7. Authenticate with AWS using OIDC
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
+          role-session-name: GitHubActions-${{ github.run_id }}
 
-      # 7. Login to Amazon ECR
+
+      # 8. Verify AWS identity
+      - name: Check AWS identity
+        run: |
+          aws sts get-caller-identity
+
+
+      # 9. Login to ECR
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 8. Build Docker image
+
+      # 10. Build Docker image
       - name: Build Docker image
         run: |
           docker build \
@@ -56,7 +77,8 @@ jobs:
             -t ${{ steps.login-ecr.outputs.registry }}/node-ci-cd-ecr:latest \
             .
 
-      # 9. Push image to ECR
+
+      # 11. Push image to ECR
       - name: Push Docker image
         run: |
           docker push \

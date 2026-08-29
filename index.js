@@ -8,6 +8,6 @@ app.listen(PORT, () => {
 
 app.use("/", (req, res) => {
   return res.json({
-    text: "hello Harshita at port 3000 and hello crazy guys... harshit",
+    text: "hello Harshita at port 3000 and hello crazy guys... harshit sharma",
   });
 });

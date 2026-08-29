@@ -2,9 +2,11 @@ name: Node.js CI/CD
 
 on:
   push:
+    branches:
+      - main
 
 jobs:
-  build-and-push:
+  build-test-deploy:
     runs-on: ubuntu-latest
 
     permissions:
@@ -12,25 +14,38 @@ jobs:
       contents: read
 
     steps:
+      # -------------------------
+      # 1. Checkout
+      # -------------------------
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # -------------------------
+      # 2. Setup Node
+      # -------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
+      # -------------------------
+      # 3. Install dependencies
+      # -------------------------
       - name: Install dependencies
         run: npm install
 
-      - name: Start application
+      # -------------------------
+      # 4. Start and test app
+      # -------------------------
+      - name: Test application
         run: |
           node index.js &
           sleep 3
+          curl http://localhost:3000
 
-      - name: Check application
-        run: curl http://localhost:3000
-
+      # -------------------------
+      # 5. Authenticate with AWS
+      # -------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -38,24 +53,58 @@ jobs:
           aws-region: ap-south-1
           role-session-name: GitHubActions-${{ github.run_id }}
 
-      - name: Check AWS identity
-        run: aws sts get-caller-identity
-
+      # -------------------------
+      # 6. Login to ECR
+      # -------------------------
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # -------------------------
+      # 7. Build Docker image
+      # -------------------------
       - name: Build Docker image
         run: |
           docker build \
             -t ${{ steps.login-ecr.outputs.registry }}/node-ci-cd-ecr:${{ github.sha }} \
-            -t ${{ steps.login-ecr.outputs.registry }}/node-ci-cd-ecr:latest \
             .
 
+      # -------------------------
+      # 8. Push Docker image
+      # -------------------------
       - name: Push Docker image
         run: |
           docker push \
             ${{ steps.login-ecr.outputs.registry }}/node-ci-cd-ecr:${{ github.sha }}
 
-          docker push \
-            ${{ steps.login-ecr.outputs.registry }}/node-ci-cd-ecr:latest
+      # -------------------------
+      # 9. Download current ECS task definition
+      # -------------------------
+      - name: Download task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition node-ci-cd-task \
+            --query taskDefinition \
+            > task-definition.json
+
+      # -------------------------
+      # 10. Replace image in task definition
+      # -------------------------
+      - name: Render new task definition
+        id: render-task-definition
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: node-ci-cd-container
+          image: ${{ steps.login-ecr.outputs.registry }}/node-ci-cd-ecr:${{ github.sha }}
+
+      # -------------------------
+      # 11. Deploy to ECS
+      # -------------------------
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-task-definition.outputs.task-definition }}
+          service: node-ci-cd-task-service-44cbftqp
+          cluster: node-ci-cd-cluster
+          wait-for-service-stability: true
